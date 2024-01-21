@@ -15,34 +15,40 @@ def load_image(image_path):
         print(f"Error loading the image: {e}")
         exit(1)
 
-def encrypt_image(image_path, key, iv, password=None):
-    if password:
-        key = PBKDF2(password, salt=b'salt123', dkLen=16, count=1000000)
+def generate_key(password, salt=b'salt123', iterations=1000000):
+    return PBKDF2(password, salt=salt, dkLen=32, count=iterations)
 
+def encrypt_image(image_path, password):
+    iv = get_random_bytes(16)
+    key = generate_key(password)
     cipher = AES.new(key, AES.MODE_CBC, iv)
+
     with open(image_path, 'rb') as file:
         plaintext = file.read()
 
     ciphertext = cipher.encrypt(pad(plaintext, AES.block_size))
 
+    # Store IV and encrypted image together
+    encrypted_data = iv + ciphertext
+
     # Create a directory to store encrypted images
     encrypted_dir = "encrypted_images"
     os.makedirs(encrypted_dir, exist_ok=True)
 
-    encrypted_path = os.path.join(encrypted_dir, "encrypted_image.jpg")
+    encrypted_path = os.path.join(encrypted_dir, "encrypted_image.enc")
     with open(encrypted_path, 'wb') as file:
-        file.write(ciphertext)
+        file.write(encrypted_data)
 
-def decrypt_image(encrypted_path, key, iv, password=None):
-    if password:
-        decryption_key = PBKDF2(password, salt=b'salt123', dkLen=16, count=1000000)
-    else:
-        decryption_key = key
-
-    cipher = AES.new(decryption_key, AES.MODE_CBC, iv)
+def decrypt_image(encrypted_path, password):
     with open(encrypted_path, 'rb') as file:
-        ciphertext = file.read()
+        encrypted_data = file.read()
 
+    # Extract IV and ciphertext
+    iv = encrypted_data[:16]
+    ciphertext = encrypted_data[16:]
+
+    key = generate_key(password)
+    cipher = AES.new(key, AES.MODE_CBC, iv)
     decrypted_data = unpad(cipher.decrypt(ciphertext), AES.block_size)
 
     # Create a directory to store decrypted images
@@ -55,15 +61,12 @@ def decrypt_image(encrypted_path, key, iv, password=None):
 
 if __name__ == "__main__":
     image_path = input("Enter the path of the image: ")
-    password = input("Enter your password (optional): ")
-
-    key = get_random_bytes(16)
-    iv = get_random_bytes(16)
+    password = input("Enter your password: ")
 
     # Encrypt the image
-    encrypt_image(image_path, key, iv, password)
+    encrypt_image(image_path, password)
     print("Image encrypted successfully.")
 
     # Decrypt the image
-    decrypt_image("encrypted_images/encrypted_image.jpg", key, iv, password)
+    decrypt_image("encrypted_images/encrypted_image.enc", password)
     print("Image decrypted successfully.")
